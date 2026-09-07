@@ -1,0 +1,38 @@
+name: Oportunidad de apertura (loop corto, casi al instante)
+
+# Corre UNA vez al dia, a los pocos minutos de abrir el mercado (donde se
+# concentran los saltos de precio por noticias de la noche/madrugada). Es un
+# job aparte del cron de cada 5 min: adentro hace su propio loop de ~20 min
+# revisando cada 30s -- eso no se puede lograr con `schedule:` (GitHub no
+# dispara mas seguido que cada 5 min), pero SI se puede lograr con un loop
+# largo dentro de una sola corrida. Gratis por ser repo publico.
+
+on:
+  schedule:
+    - cron: "2 12 * * 1-5"
+  workflow_dispatch:
+
+jobs:
+  vigilar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del repo privado (codigo de verdad)
+        uses: actions/checkout@v4
+        with:
+          repository: cristobalGGg/mercado-chile
+          token: ${{ secrets.PRIVATE_REPO_PAT }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: "pip"
+          cache-dependency-path: ingesta/requirements.txt
+
+      - run: pip install -r ingesta/requirements.txt
+
+      - name: Vigilar oportunidades (~20 min, un chequeo cada 30s)
+        env:
+          DATABASE_URL_INGESTA: ${{ secrets.DATABASE_URL_INGESTA }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python ingesta/oportunidad_apertura.py
