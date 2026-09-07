@@ -1,0 +1,43 @@
+name: Precios y momentum (cada 5 min, horario de mercado)
+
+# Este repo existe SOLO para que este cron corra gratis: GitHub da minutos de
+# Actions ilimitados en repos PUBLICOS, con un piso real de 5 min entre
+# corridas (no lo hace mas seguido aunque el cron pida menos). El codigo de
+# verdad vive en el repo privado (mercado-chile) -- este workflow solo lo
+# checkea y corre el mismo script de siempre, sin duplicar nada: si el
+# codigo cambia alla, este cron ya corre la version nueva en su proxima
+# corrida, no hay nada que sincronizar a mano.
+#
+# CONTIENE_TOKEN_DE_SOLO_LECTURA: el PAT de abajo (secrets.PRIVATE_REPO_PAT)
+# debe ser un fine-grained token con acceso SOLO al repo mercado-chile y
+# permiso SOLO "Contents: Read-only". Nada mas.
+
+on:
+  schedule:
+    - cron: "*/5 12-21 * * 1-5"
+  workflow_dispatch:
+
+jobs:
+  ingesta:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del repo privado (codigo de verdad)
+        uses: actions/checkout@v4
+        with:
+          repository: cristobalGGg/mercado-chile
+          token: ${{ secrets.PRIVATE_REPO_PAT }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: "pip"
+          cache-dependency-path: ingesta/requirements.txt
+
+      - run: pip install -r ingesta/requirements.txt
+
+      - name: Precios y momentum (+ alerta de apertura/cierre si corresponde)
+        env:
+          DATABASE_URL_INGESTA: ${{ secrets.DATABASE_URL_INGESTA }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python ingesta/cargar.py precios
