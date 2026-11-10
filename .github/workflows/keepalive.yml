@@ -1,0 +1,33 @@
+name: Mantener el repo activo (GitHub desactiva los crons de un repo publico a los 60 dias sin actividad)
+
+# GitHub desactiva solo los workflows con schedule de un repo PUBLICO cuando
+# pasan 60 dias sin actividad (commits, issues, PRs). Las corridas de los
+# propios workflows y los workflow_dispatch del pinger NO cuentan como
+# actividad. Este workflow hace un commit vacio cuando el ultimo commit tiene
+# mas de 30 dias: a lo mas 1 commit al mes, y siempre queda margen de 30 dias.
+# Se corre cada lunes para tener varios intentos si GitHub se salta alguno.
+
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Commit vacio si el ultimo commit tiene mas de 30 dias
+        run: |
+          edad=$(( $(date +%s) - $(git log -1 --format=%ct) ))
+          echo "Edad del ultimo commit: $edad s"
+          if [ "$edad" -gt 2592000 ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit --allow-empty -m "Mantiene el repo activo (evita la desactivacion de los crons por 60 dias sin actividad)"
+            git push
+          fi
